@@ -4,6 +4,7 @@
 #include <cxxopts.hpp>
 
 #include <iostream>
+#include <fstream>
 /* #include <OutputFile.hpp> */
 
 int main( int argc, char** argv )
@@ -51,5 +52,9 @@ int main( int argc, char** argv )
 
     /* OutputFile oFile(outputFile); */
     /* std::cout << (oFile.save(classBuilder.getStream()) ? "Successfuly created " : "Failed to create ") << outputFile << std::endl; */
-    std::cout << classBuilder.getStream().str() << std::endl;
+    std::ofstream oFile(outputFile);
+    oFile << classBuilder.getStream().str() << std::endl;
+    oFile.close();
+
+    return 0;
 }

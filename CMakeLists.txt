@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.28 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.26 FATAL_ERROR)
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/ProjectVersion.cmake)
@@ -10,10 +10,13 @@ project(
   VERSION ${PROJECT_VERSION}
   DESCRIPTION "svd2cpp")
 
-find_package(spdlog REQUIRED)
-find_package(Catch2 REQUIRED)
-find_package(tinyxml2 REQUIRED)
-find_package(cxxopts REQUIRED)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+add_subdirectory(libs/spdlog)
+add_subdirectory(libs/Catch2)
+add_subdirectory(libs/tinyxml2)
+add_subdirectory(libs/cxxopts)
 
 file(GLOB_RECURSE ${PROJECT_NAME}_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp)
 file(GLOB_RECURSE ${PROJECT_NAME}_HEADER CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/*.h)
