@@ -10,11 +10,11 @@
 #include <sstream>
 #include <vector>
 
-struct ClassBuilder
+struct FileBuilder
 {
-    ClassBuilder( const cxxopts::ParseResult& results_,
-        const DeviceInfo& deviceInfo_,
-        const std::vector< Peripheral >& peripherals_ );
+    FileBuilder(const cxxopts::ParseResult& results_,
+                const DeviceInfo& deviceInfo_,
+                const std::vector< Peripheral >& peripherals_ );
     void setupBuilders();
     void build();
     const std::stringstream& getStream() const;

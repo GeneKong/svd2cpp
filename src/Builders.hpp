@@ -5,7 +5,12 @@
 
 #include <sstream>
 
-struct ZeroPointerBuilder : public IBuilder
+struct NSBeginBuilder : public IBuilder
+{
+    void build( std::stringstream& ss ) const final;
+};
+
+struct NSEnduilder : public IBuilder
 {
     void build( std::stringstream& ss ) const final;
 };

@@ -1,4 +1,4 @@
-#include "ClassBuilder.hpp"
+#include "FileBuilder.hpp"
 #include "XmlParser.hpp"
 
 #include <cxxopts.hpp>
@@ -46,7 +46,7 @@ int main( int argc, char** argv )
         return 3;
     }
     xmlParser.parseXml();
-    ClassBuilder classBuilder( result, xmlParser.getDeviceInfo(), xmlParser.getPeripherals() );
+    FileBuilder classBuilder(result, xmlParser.getDeviceInfo(), xmlParser.getPeripherals() );
     classBuilder.setupBuilders();
     classBuilder.build();
 

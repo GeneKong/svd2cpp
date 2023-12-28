@@ -2,42 +2,86 @@
 
 #include <bitset>
 #include <iostream>
+#include <fmt/core.h>
 
-void ZeroPointerBuilder::build( std::stringstream& ss ) const
+std::string toCamelCase(const std::string& str)
 {
-    ss << "template <unsigned int zero = 0>\n"
-          "constexpr unsigned int *zeroVal = reinterpret_cast<unsigned int *>(zero);\n\n";
+    std::stringstream ss;
+    bool capitalize = true;
+    for (char c : str)
+    {
+        if (c == ' ' || c == '_')
+        {
+            capitalize = true;
+        }
+        else if (capitalize)
+        {
+            ss << static_cast<char>(std::toupper(c));
+            capitalize = false;
+        }
+        else
+        {
+            ss << static_cast<char>(std::tolower(c));
+        }
+    }
+    // Check if the last character of the original string is an underscore
+    if (!str.empty() && str.back() == '_')
+    {
+        // If so, append an underscore to the result string
+        ss << '_';
+    }
+    return ss.str();
+}
+
+void NSBeginBuilder::build(std::stringstream &ss) const
+{
+    ss << fmt::format(
+        "#pragma once\n"
+        "#include \"RegBase.h\"\n\n"
+        "namespace FEmbed {{\n"
+        );
+}
+
+void NSEnduilder::build(std::stringstream& ss ) const
+{
+    ss << fmt::format("}};\n");
 }
 
 void FieldDefineBuilder::build( std::stringstream& ss ) const
 {
-    ss << "#define __FIELD(_FieldName, _bitOffset, _bitMask, _address)                          \\\n"
-          "struct _FieldName                                                                    \\\n"
-          "{                                                                                    \\\n"
-          "    constexpr static inline unsigned int bitOffset() { return _bitOffset; }          \\\n"
-          "    constexpr static inline unsigned int bitMask() { return _bitMask; }              \\\n"
-          "    constexpr static inline unsigned int *address() { return zeroVal<> + _address; } \\\n"
-          "};\n\n";
+    // Do nothing...
 }
 
 void PeripheralBuilder::build( std::stringstream& ss ) const
 {
-    ss << "namespace " << peripheral.name << "{\n";
-    for( auto& registe : peripheral.registers ) {
+//    ss << "namespace " << peripheral.name << "{\n";
+//    for( auto& registe : peripheral.registers ) {
+//        RegisterBuilder( registe, peripheral.baseAddress ).build( ss );
+//    }
+//    ss << "}\n\n";
+    ss <<   "template<typename _T = uint32_t, _T BaseAddr = 0x" << std::hex << peripheral.baseAddress << std::dec << ">\n"
+            "class " << toCamelCase(peripheral.name) << " {\n"
+            "  public:";
+        for( auto& registe : peripheral.registers ) {
         RegisterBuilder( registe, peripheral.baseAddress ).build( ss );
     }
-    ss << "}\n\n";
+    ss << "};\n\n";
+
 }
 
 void RegisterBuilder::build( std::stringstream& ss ) const
 {
-    ss << "    "
-       << "namespace " << registe.name << "{\n";
+    ss <<
+    "    class " << toCamelCase(registe.name) << " : public Register<_T, BaseAddr + " << registe.addressOffset << "> {\n"
+    "      public:\n"
+    "        constexpr static _T RegisterAddr =  BaseAddr + " << registe.addressOffset << ";\n"
+    "        constexpr static inline unsigned int address() { return RegisterAddr; }\n";
+
     for( auto& field : registe.fields ) {
         FieldBuilder( field, getRegisterAddress() ).build( ss );
     }
-    ss << "    "
-       << "}\n";
+    ss <<
+    "    } " << registe.name << ";\n\n";
 }
 
 unsigned int RegisterBuilder::getRegisterAddress() const
@@ -47,9 +91,8 @@ unsigned int RegisterBuilder::getRegisterAddress() const
 
 void FieldBuilder::build( std::stringstream& ss ) const
 {
-    ss << "        "
-       << "__FIELD(" << field.name << ", " << field.bitOffset << ", " << field.bitWidth << ", " << std::hex
-       << "0x" << getAddress() << std::dec << ")\n";
+    ss <<
+    "        Filed<_T, RegisterAddr, "<< field.bitOffset << ", "<< field.bitWidth <<"> " << field.name << ";\n";
 }
 
 unsigned int FieldBuilder::getAddress() const
@@ -59,25 +102,5 @@ unsigned int FieldBuilder::getAddress() const
 
 void FunctionsBuilder::build( std::stringstream& ss ) const
 {
-    ss << "template<class FIELD>\n"
-          "constexpr inline void set(){\n"
-          "    *FIELD::address() |= 1 << FIELD::bitOffset();\n"
-          "}\n"
-          "\n"
-          "template<class FIELD, unsigned int VAL>\n"
-          "constexpr inline void set(){\n"
-          "    static_assert(VAL & (FIELD::bitMask() >> FIELD::bitOffset()), \"Value is too big\");\n"
-          "    *FIELD::address() = *FIELD::address() & ~FIELD::bitMask() | VAL << FIELD::bitOffset();\n"
-          "}\n"
-          "\n"
-          "template<class FIELD>\n"
-          "constexpr inline void reset(){\n"
-          "    *FIELD::address() &= ~(1 << FIELD::bitOffset());\n"
-          "}\n"
-          "\n"
-          "template<class FIELD>\n"
-          "constexpr inline unsigned int read(){\n"
-          "    return (*FIELD::address() & FIELD::bitMask()) >> FIELD::bitOffset();\n"
-          "}"
-          "\n\n";
+
 }

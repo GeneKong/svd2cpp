@@ -55,9 +55,22 @@ void XmlParser::setDeviceInfoAttrib( tinyxml2::XMLElement* deviceRoot,
     unsigned int& field ) const
 {
     tinyxml2::XMLElement* deviceEntry = deviceRoot->FirstChildElement( name );
-    field = deviceEntry ?
-        ( std::stoul( deviceEntry->GetText() ) ? 0 : std::stoul( deviceEntry->GetText(), 0, 16 ) ) :
-        0;
+    if(deviceEntry)
+    {
+        std::string text = deviceEntry->GetText();
+        if(text.find("0x") != std::string::npos)
+        {
+            field = std::stoul( deviceEntry->GetText(), 0, 16 );
+        }
+        else
+        {
+            field = std::stoul( deviceEntry->GetText() );
+        }
+    }
+    else
+    {
+        field = 0;
+    }
 }
 void XmlParser::setDeviceInfoAttrib( tinyxml2::XMLElement* deviceRoot,
     const char* name,
