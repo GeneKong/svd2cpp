@@ -4,7 +4,8 @@
 
 #pragma once
 
-#include "RegBase.h"
+#include "gpio_slice.h"
+
 
 // typedef struct
 //{
@@ -32,12 +33,9 @@ class Gpio_ {
         constexpr static T RegisterAddr = BaseAddr + 0;
         constexpr static inline unsigned int address() { return RegisterAddr; }
 
-        // Method for tuple in all
-        constexpr auto static MODEs = make_filed_array<T, BaseAddr + 0, 0, 2, 16>();
-
         // Method for individual (recommend)
-        Filed<T, RegisterAddr, 0, 2> MODER0;
-        Filed<T, RegisterAddr, 2, 2> MODER1;
+        static Filed<T, RegisterAddr, 0, 2> MODER0;
+        static Filed<T, RegisterAddr, 2, 2> MODER1;
         Filed<T, BaseAddr + 0, 4, 2> MODER2;
         Filed<T, BaseAddr + 0, 6, 2> MODER3;
         Filed<T, BaseAddr + 0, 8, 2> MODER4;
@@ -52,6 +50,16 @@ class Gpio_ {
         Filed<T, BaseAddr + 0, 26, 2> MODER13;
         Filed<T, BaseAddr + 0, 28, 2> MODER14;
         Filed<T, BaseAddr + 0, 30, 2> MODER15;
+
+        // Method for tuple in all
+        //constexpr auto static MODEs = make_filed_array<T, BaseAddr + 0, 0, 2, 16>();
+        constexpr auto static MODEs = std::make_tuple(MODER0, MODER1);
+
+        template< size_t N >
+        const void set() {
+            auto &mode = std::get(MODERs, N);
+            mode.set();
+        }
     } MODER;
 
     class Otyper : public Register<T, BaseAddr + 4> {
@@ -81,8 +89,8 @@ class Gpio_ {
     } OTYPER;
 };
 
-// 这里设计一个GPIO的驱动
-using GpioA = pac::Gpioa<>;
+// GPIO Driver level test...
+using PA = Gpioa<>;
 
 enum class GpioPort {
     A,
@@ -98,11 +106,10 @@ enum class GpioPort {
     K
 };
 
-// 设计GPIO的合并和自动展开测试
 constexpr auto static Gpios = std::make_tuple(Gpioa<>(), Gpiob<>(), Gpio_<>());
 
 template<GpioPort PORT, size_t PIN>
-class Gpio {
+class Gpio_m1 {
   public:
     constexpr static void setValid()
     {
@@ -112,7 +119,25 @@ class Gpio {
     }
 };
 
-using PC2 = Gpio<GpioPort::C, 2>;
+template <size_t PIN>
+using PC = Gpio_m1<GpioPort::C, PIN>;
+using PC2 = PC<2>;
+
+template<typename GpioType = Gpioa<>, size_t PIN = 0>
+class Gpio_m2 {
+public:
+    constexpr static void setValid()
+    {
+        GpioType gpiox{};
+        gpiox.MODER.MODER0.set();
+    }
+};
+
+
+void gpio_test1()
+{
+
+}
 
 }
 

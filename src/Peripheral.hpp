@@ -115,6 +115,11 @@ struct Field
     EAccess fieldAccess;
     std::vector< Enum > enums;
 
+    // Dim
+    unsigned int dim;
+    unsigned int dimIncrement;
+    std::vector<std::string> dimIndex;
+
     void display() const
     {
         fmt::print(
@@ -134,6 +139,7 @@ struct Field
 struct Register
 {
     std::string name;
+    std::string displayName;
     std::string description;
     unsigned int addressOffset;
     unsigned int size;
@@ -145,8 +151,13 @@ struct Register
     unsigned int dim;
     unsigned int dimIncrement;
     std::vector<std::string> dimIndex;
+
+    // Cluster Dim fields below
     std::string dimName;
     std::string dimDescription;
+    unsigned int dimAddressOffset;
+    // Register in cluster
+    std::vector<Register> registers;
 
     void display() const
     {

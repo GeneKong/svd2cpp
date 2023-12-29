@@ -133,9 +133,10 @@ Peripheral XmlParser::parsePeripheral( tinyxml2::XMLElement* peripheralRoot ) co
                  registerRoot = registerRoot->NextSibling() ) {
                 // Parse only "register/cluster" node
                 if ( std::string( registerRoot->Value() ) == "cluster" ) {
-                    // Parse register with dim, dimIncrement, dimIndex
+                    // Parse registers with dim, dimIncrement, dimIndex in cluster
                     unsigned int dim{1};
                     unsigned int dimIncrement{0};
+                    unsigned int dimAddressOffset{0};
                     std::string dimIndex{};
                     std::vector<std::string> dimIndexV{};
                     std::string dimName{};
@@ -145,6 +146,7 @@ Peripheral XmlParser::parsePeripheral( tinyxml2::XMLElement* peripheralRoot ) co
                     setDeviceInfoAttrib( registerRoot->ToElement(), "dimIndex", dimIndex );
                     setDeviceInfoAttrib( registerRoot->ToElement(), "name", dimName );
                     setDeviceInfoAttrib( registerRoot->ToElement(), "description", dimDescription );
+                    setDeviceInfoAttrib( registerRoot->ToElement(), "addressOffset", dimAddressOffset );
 
                     if(dim > 1) {
                         // dimIndex like 0-1,5,7-8, need paser to 0,1,5,7,8
@@ -165,8 +167,17 @@ Peripheral XmlParser::parsePeripheral( tinyxml2::XMLElement* peripheralRoot ) co
                         }
                     }
                     else {
+                        dim = 1;
                         dimIndexV.push_back("");
                     }
+
+                    Register cluster{};
+                    cluster.dimName = dimName;
+                    cluster.dimDescription = dimDescription;
+                    cluster.dim = dim;
+                    cluster.dimIncrement = dimIncrement;
+                    cluster.dimIndex = dimIndexV;
+                    cluster.addressOffset = dimAddressOffset;
 
                     for( tinyxml2::XMLNode* dimRegisterRoot = registerRoot->FirstChildElement( "register" ); dimRegisterRoot;
                          dimRegisterRoot = dimRegisterRoot->NextSibling() ) {
@@ -178,9 +189,12 @@ Peripheral XmlParser::parsePeripheral( tinyxml2::XMLElement* peripheralRoot ) co
                         reg.dim = dim;
                         reg.dimIncrement = dimIncrement;
                         reg.dimIndex = dimIndexV;
+                        reg.dimAddressOffset = dimAddressOffset;
 
-                        peripheral.registers.push_back( reg );
+                        cluster.registers.push_back( reg );
                     }
+
+                    peripheral.registers.push_back( cluster );
                 }
                 else if( std::string( registerRoot->Value() ) != "register" ) {
                     SPDLOG_WARN("Peripheral {} has register value {}", peripheral.name, registerRoot->Value());
@@ -213,12 +227,34 @@ Register XmlParser::parseRegister( tinyxml2::XMLElement* registerRoot ) const
 {
     Register registe{};
     setDeviceInfoAttrib( registerRoot, "name", registe.name );
+    setDeviceInfoAttrib( registerRoot, "displayName", registe.displayName );
     setDeviceInfoAttrib( registerRoot, "description", registe.description );
     setDeviceInfoAttrib( registerRoot, "addressOffset", registe.addressOffset );
     setDeviceInfoAttrib( registerRoot, "size", registe.size );
     setDeviceInfoAttrib( registerRoot, "access", registe.registerAccess );
     setDeviceInfoAttrib( registerRoot, "resetValue", registe.resetValue );
 
+    setDeviceInfoAttrib( registerRoot->ToElement(), "dim", registe.dim );
+    setDeviceInfoAttrib( registerRoot->ToElement(), "dimIncrement", registe.dimIncrement );
+    std::string dimIndex{};
+    setDeviceInfoAttrib( registerRoot->ToElement(), "dimIndex", dimIndex );
+    if(dimIndex != noValue)
+    {
+        std::stringstream ss(dimIndex);
+        std::string item;
+        while (std::getline(ss, item, ',')) {
+            size_t dashPos = item.find('-');
+            if (dashPos != std::string::npos) {
+                int start = std::stoi(item.substr(0, dashPos));
+                int end = std::stoi(item.substr(dashPos + 1));
+                for (int i = start; i <= end; ++i) {
+                    registe.dimIndex.push_back(std::to_string(i));
+                }
+            } else {
+                registe.dimIndex.push_back(item);
+            }
+        }
+    }
     //Iterate over all fields and append them to registe
     tinyxml2::XMLElement* fieldsRoot = registerRoot->FirstChildElement( "fields" );
     if( fieldsRoot != nullptr ) {
@@ -229,13 +265,13 @@ Register XmlParser::parseRegister( tinyxml2::XMLElement* registerRoot ) const
                 SPDLOG_WARN("Field node has value {}", fieldRoot->Value());
                 continue;
             }
-            registe.fields.push_back( parseField( fieldRoot->ToElement() ) );
+            registe.fields.push_back( parseField( fieldRoot->ToElement(), registe ) );
         }
     }
     return registe;
 }
 
-Field XmlParser::parseField( tinyxml2::XMLElement* fieldRoot ) const
+Field XmlParser::parseField( tinyxml2::XMLElement* fieldRoot, Register &currentRegsiter) const
 {
     Field field;
     setDeviceInfoAttrib( fieldRoot, "name", field.name );
@@ -243,50 +279,127 @@ Field XmlParser::parseField( tinyxml2::XMLElement* fieldRoot ) const
     setDeviceInfoAttrib( fieldRoot, "bitOffset", field.bitOffset );
     setDeviceInfoAttrib( fieldRoot, "bitWidth", field.bitWidth );
     setDeviceInfoAttrib( fieldRoot, "access", field.fieldAccess );
-
-    // paser all enumeratedValues and process for read,write
-    tinyxml2::XMLElement* enumeratedValuesRoot = fieldRoot->FirstChildElement( "enumeratedValues" );
-    if( enumeratedValuesRoot != nullptr ) {
-        //Parse name and usage then multi enumeratedValue field
-        std::string usage;
-        Enum enumeratedValues{};
-
-        setDeviceInfoAttrib( enumeratedValuesRoot->ToElement(), "name", enumeratedValues.name );
-        setDeviceInfoAttrib( enumeratedValuesRoot->ToElement(), "usage", usage );
-
-        if( usage == "read" ) {
-            enumeratedValues.usage = EnumUsage::Read;
-        }
-        else if( usage == "write" ) {
-            enumeratedValues.usage = EnumUsage::Write;
-        }
-        else {
-            enumeratedValues.usage = EnumUsage::ReadWrite;
-        }
-
-        //Iterate over all enumeratedValue and append them to field
-        for( tinyxml2::XMLNode* valueRoot = enumeratedValuesRoot->FirstChildElement( "enumeratedValue" ); valueRoot;
-             valueRoot = valueRoot->NextSibling() ) {
-
-            if(valueRoot != nullptr) {
-                //Parse only "name" node
-                if (std::string(valueRoot->Value()) != "enumeratedValue") {
-                    SPDLOG_WARN("enumeratedValue node has value {}", valueRoot->Value());
-                    continue;
+    setDeviceInfoAttrib( fieldRoot, "dim", field.dim );
+    setDeviceInfoAttrib( fieldRoot, "dimIncrement", field.dimIncrement );
+    std::string dimIndex{};
+    setDeviceInfoAttrib( fieldRoot, "dimIndex", dimIndex );
+    if(dimIndex != noValue)
+    {
+        std::stringstream ss(dimIndex);
+        std::string item;
+        while (std::getline(ss, item, ',')) {
+            size_t dashPos = item.find('-');
+            if (dashPos != std::string::npos) {
+                int start = std::stoi(item.substr(0, dashPos));
+                int end = std::stoi(item.substr(dashPos + 1));
+                for (int i = start; i <= end; ++i) {
+                    field.dimIndex.push_back(std::to_string(i));
                 }
-
-                EnumValue enumeratedValue{};
-                setDeviceInfoAttrib(valueRoot->ToElement(), "name", enumeratedValue.name);
-                setDeviceInfoAttrib(valueRoot->ToElement(), "description", enumeratedValue.description);
-                setDeviceInfoAttrib(valueRoot->ToElement(), "value", enumeratedValue.value);
-
-                enumeratedValues.values.push_back(enumeratedValue);
+            } else {
+                field.dimIndex.push_back(item);
             }
         }
-
-
-        field.enums.push_back(enumeratedValues);
     }
+
+    // paser all enumeratedValues and process for read,write
+    for(tinyxml2::XMLNode* enumeratedValuesRoot = fieldRoot->FirstChildElement( "enumeratedValues" );
+         enumeratedValuesRoot;
+         enumeratedValuesRoot = enumeratedValuesRoot->NextSibling())
+    {
+        if( enumeratedValuesRoot != nullptr ) {
+            //Check if peripheral is derived from previous one
+            const char* attribute = enumeratedValuesRoot->ToElement()->Attribute( "derivedFrom" );
+            const bool isDerived = attribute != nullptr;
+            const std::string derivedFrom = isDerived ? attribute : "";
+
+            if( isDerived == true ) {
+                //Find the base peripheral and copy it to the new one
+                Enum enumeratedValues{};
+                auto check_all = [&]( auto& p ) {
+                    for(auto &r: p.registers)
+                    {
+                        for(auto &f: r.fields)
+                        {
+                            for(auto &e: f.enums)
+                            {
+                                if(e.name == derivedFrom)
+                                {
+                                    enumeratedValues = e;
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                    return false;
+                };
+                auto check_curr = [&](auto &f) {
+                    for(auto &e: f.enums)
+                    {
+                        if(e.name == derivedFrom)
+                        {
+                            enumeratedValues = e;
+                            return true;
+                        }
+                    }
+                    return false;
+                };
+                auto resultIt = std::find_if( currentRegsiter.fields.begin(), currentRegsiter.fields.end(), check_curr );
+                if( resultIt != currentRegsiter.fields.end() ) {
+                    field.enums.push_back( enumeratedValues );
+                }
+                else {
+                    auto resultIt = std::find_if( peripherals.begin(), peripherals.end(), check_all );
+                    if( resultIt != peripherals.end() ) {
+                        field.enums.push_back( enumeratedValues );
+                    }
+                    else {
+                        SPDLOG_WARN( "Couldn't find {} enum {}", field.name, derivedFrom );
+                    }
+                }
+            }
+            else {
+                //Parse name and usage then multi enumeratedValue field
+                std::string usage;
+                Enum enumeratedValues{};
+
+                setDeviceInfoAttrib( enumeratedValuesRoot->ToElement(), "name", enumeratedValues.name );
+                setDeviceInfoAttrib( enumeratedValuesRoot->ToElement(), "usage", usage );
+
+                if( usage == "read" ) {
+                    enumeratedValues.usage = EnumUsage::Read;
+                }
+                else if( usage == "write" ) {
+                    enumeratedValues.usage = EnumUsage::Write;
+                }
+                else {
+                    enumeratedValues.usage = EnumUsage::ReadWrite;
+                }
+
+                //Iterate over all enumeratedValue and append them to field
+                for( tinyxml2::XMLNode* valueRoot = enumeratedValuesRoot->FirstChildElement( "enumeratedValue" );
+                     valueRoot;
+                     valueRoot = valueRoot->NextSibling() ) {
+                    if( valueRoot != nullptr ) {
+                        //Parse only "name" node
+                        if( std::string( valueRoot->Value() ) != "enumeratedValue" ) {
+                            SPDLOG_WARN( "enumeratedValue node has value {}", valueRoot->Value() );
+                            continue;
+                        }
+
+                        EnumValue enumeratedValue{};
+                        setDeviceInfoAttrib( valueRoot->ToElement(), "name", enumeratedValue.name );
+                        setDeviceInfoAttrib( valueRoot->ToElement(), "description", enumeratedValue.description );
+                        setDeviceInfoAttrib( valueRoot->ToElement(), "value", enumeratedValue.value );
+
+                        enumeratedValues.values.push_back( enumeratedValue );
+                    }
+                }
+
+                field.enums.push_back( enumeratedValues );
+            }
+        }
+    }
+
 
     return field;
 }

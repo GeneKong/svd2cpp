@@ -34,7 +34,7 @@ private:
     Peripheral parsePeripheral( tinyxml2::XMLElement* peripheralRoot ) const;
     AddressBlock parseAddressBlock( tinyxml2::XMLElement* addressBlockRoot ) const;
     Register parseRegister( tinyxml2::XMLElement* registerRoot ) const;
-    Field parseField( tinyxml2::XMLElement* fieldRoot ) const;
+    Field parseField( tinyxml2::XMLElement* fieldRoot, Register &currentRegsiter) const;
 
 private:
     tinyxml2::XMLDocument xmlDocument;
