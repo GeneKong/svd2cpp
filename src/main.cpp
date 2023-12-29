@@ -1,14 +1,37 @@
 #include "FileBuilder.hpp"
 #include "XmlParser.hpp"
 
+#include <spdlog/spdlog.h>
+#include <spdlog/sinks/rotating_file_sink.h>
+#include <spdlog/fmt/bin_to_hex.h>
+#include <spdlog/sinks/wincolor_sink.h>
+
 #include <cxxopts.hpp>
+#include <argparse/argparse.hpp>
 
 #include <iostream>
 #include <fstream>
-/* #include <OutputFile.hpp> */
 
 int main( int argc, char** argv )
 {
+    #if defined(__linux__) || defined(__linux)
+    auto console_sink = std::make_shared<spdlog::sinks::ansicolor_stdout_sink_mt>();
+    console_sink->set_level(spdlog::level::info);
+    console_sink->set_pattern("[storage] [%^%l%$] %s:%# %v");
+    #else
+    auto console_sink = std::make_shared<spdlog::sinks::wincolor_stdout_sink_mt>();
+    console_sink->set_level(spdlog::level::info);
+    console_sink->set_pattern("[%^%l%$] %s:%# %v");
+    #endif
+
+    std::shared_ptr<spdlog::logger> logger = nullptr;
+    logger.reset(new spdlog::logger("svd2cpp", { console_sink }));
+    logger->set_level(spdlog::level::debug);
+
+    spdlog::register_logger(logger);
+    spdlog::flush_every(std::chrono::seconds(5));
+    spdlog::set_default_logger(logger);
+
     // Create and configure options for the program
     cxxopts::Options options( "svd2cpp", "Parser from svd files to C++ header" );
     options.add_options()(

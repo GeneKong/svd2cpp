@@ -38,7 +38,7 @@ void NSBeginBuilder::build(std::stringstream &ss) const
     ss << fmt::format(
         "#pragma once\n"
         "#include \"RegBase.h\"\n\n"
-        "namespace FEmbed {{\n"
+        "namespace pac {{\n"
         );
 }
 
@@ -59,9 +59,13 @@ void PeripheralBuilder::build( std::stringstream& ss ) const
 //        RegisterBuilder( registe, peripheral.baseAddress ).build( ss );
 //    }
 //    ss << "}\n\n";
-    ss <<   "template<typename _T = uint32_t, _T BaseAddr = 0x" << std::hex << peripheral.baseAddress << std::dec << ">\n"
-            "class " << toCamelCase(peripheral.name) << " {\n"
-            "  public:";
+    ss << fmt::format(
+        "template<typename _T = uint32_t, _T BaseAddr = 0x{:x}>\n"
+        "class {} {{\n"
+        "  public:\n",
+        peripheral.baseAddress,
+        toCamelCase(peripheral.name)
+        );
         for( auto& registe : peripheral.registers ) {
         RegisterBuilder( registe, peripheral.baseAddress ).build( ss );
     }
@@ -71,17 +75,20 @@ void PeripheralBuilder::build( std::stringstream& ss ) const
 
 void RegisterBuilder::build( std::stringstream& ss ) const
 {
-    ss <<
-    "    class " << toCamelCase(registe.name) << " : public Register<_T, BaseAddr + " << registe.addressOffset << "> {\n"
-    "      public:\n"
-    "        constexpr static _T RegisterAddr =  BaseAddr + " << registe.addressOffset << ";\n"
-    "        constexpr static inline unsigned int address() { return RegisterAddr; }\n";
+    ss << fmt::format(
+        "    class {0} : public Register<_T, BaseAddr + {1}, AccessType::{2}> {{\n"
+        "      public:\n"
+        "        constexpr static _T RegisterAddr =  BaseAddr + {1};\n"
+        "        constexpr static inline unsigned int address() {{ return RegisterAddr; }}\n",
+        toCamelCase(registe.name),
+        registe.addressOffset,
+        registe.registerAccess.toString()
+        );
 
     for( auto& field : registe.fields ) {
         FieldBuilder( field, getRegisterAddress() ).build( ss );
     }
-    ss <<
-    "    } " << registe.name << ";\n\n";
+    ss << fmt::format("    }} {};\n\n", registe.name);
 }
 
 unsigned int RegisterBuilder::getRegisterAddress() const
@@ -91,8 +98,13 @@ unsigned int RegisterBuilder::getRegisterAddress() const
 
 void FieldBuilder::build( std::stringstream& ss ) const
 {
-    ss <<
-    "        Filed<_T, RegisterAddr, "<< field.bitOffset << ", "<< field.bitWidth <<"> " << field.name << ";\n";
+    ss << fmt::format(
+    "        Filed<_T, RegisterAddr, {}, {}, AccessType::{}> {};\n",
+    field.bitOffset,
+    field.bitWidth,
+    field.fieldAccess.toString(),
+    field.name
+    );
 }
 
 unsigned int FieldBuilder::getAddress() const

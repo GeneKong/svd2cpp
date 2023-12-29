@@ -10,16 +10,19 @@ project(
   VERSION ${PROJECT_VERSION}
   DESCRIPTION "svd2cpp")
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(SPDLOG_FMT_EXTERNAL ON)
+add_subdirectory(libs/fmt)
+include_directories(libs/fmt/include)
 
 add_subdirectory(libs/spdlog)
 add_subdirectory(libs/Catch2)
 add_subdirectory(libs/tinyxml2)
 add_subdirectory(libs/cxxopts)
 
-add_subdirectory(libs/fmt)
-include_directories(libs/fmt/include)
+add_subdirectory(libs/argparse)
+include_directories(libs/argparse/include)
 
 file(GLOB_RECURSE ${PROJECT_NAME}_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp)
 file(GLOB_RECURSE ${PROJECT_NAME}_HEADER CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/*.h)

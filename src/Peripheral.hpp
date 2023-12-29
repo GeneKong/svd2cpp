@@ -1,14 +1,109 @@
 #pragma once
 
-#include <iostream>
-#include <string>
+#include <fmt/core.h>
 #include <vector>
 
-enum class EAccess
+class EAccess
 {
-    Read_Only,
-    Write_Only,
-    Read_Write
+public:
+    enum Value
+    {
+        ReadOnly,
+        WriteOnly,
+        ReadWrite
+    };
+
+    EAccess() : value(ReadWrite) {}
+    EAccess(Value e) : value(e) {}
+
+    const std::string toString() const
+    {
+        switch (value)
+        {
+        case ReadOnly:
+            return "ReadOnly";
+        case WriteOnly:
+            return "WriteOnly";
+        default:
+            return "ReadWrite";
+        }
+    }
+
+    bool operator==(const EAccess& other) const
+    {
+        return value == other.value;
+    }
+
+private:
+    Value value;
+};
+
+class EnumUsage
+{
+  public:
+    enum Value
+    {
+        Read,
+        Write,
+        ReadWrite
+    };
+
+    EnumUsage() : value(ReadWrite) {}
+    EnumUsage(Value e) : value(e) {}
+
+    const std::string toString() const
+    {
+        switch (value)
+        {
+            case Read:
+                return "Read";
+            case Write:
+                return "Write";
+            default:
+                return "ReadWrite";
+        }
+    }
+
+    bool operator==(const EnumUsage& other) const
+    {
+        return value == other.value;
+    }
+
+  private:
+    Value value;
+};
+
+struct EnumValue {
+    std::string name;
+    std::string description;
+    unsigned int value;
+    void display() const
+    {
+        fmt::print(
+            "\t\t\t\tname: {}\n"
+            "\t\t\t\tdescription: {}\n"
+            "\t\t\t\tvalue: {}\n",
+            name, description, value);
+    }
+};
+
+struct Enum
+{
+    std::string name;
+    EnumUsage usage;
+    std::vector< EnumValue > values;
+
+    void display() const
+    {
+        fmt::print(
+            "\t\tname: {}\n"
+            "\t\tusage: {}\n"
+            "\t\tvalues: \n",
+            name, usage.toString());
+        for( auto& i : values ) {
+            i.display();
+        }
+    }
 };
 
 struct Field
@@ -18,14 +113,21 @@ struct Field
     unsigned int bitOffset;
     unsigned int bitWidth;
     EAccess fieldAccess;
+    std::vector< Enum > enums;
+
     void display() const
     {
-        std::cout << "\t\tname: " << name << std::endl
-                  << "\t\tdescription: " << description << std::endl
-                  << "\t\tbitOffset: " << bitOffset << std::endl
-                  << "\t\tbitWidth: " << bitWidth << std::endl
-                  << "\t\tfieldAccess: " << (int)fieldAccess << std::endl
-                  << std::endl;
+        fmt::print(
+            "\t\tname: {}\n"
+            "\t\tdescription: {}\n"
+            "\t\tbitOffset: {}\n"
+            "\t\tbitWidth: {}\n"
+            "\t\tfieldAccess: {}\n"
+            "\t\tenums: \n",
+            name, description, bitOffset, bitWidth, fieldAccess.toString());
+        for( auto& i : enums ) {
+            i.display();
+        }
     }
 };
 
@@ -39,16 +141,24 @@ struct Register
     unsigned int resetValue;
     std::vector< Field > fields;
 
+    // Dim
+    unsigned int dim;
+    unsigned int dimIncrement;
+    std::vector<std::string> dimIndex;
+    std::string dimName;
+    std::string dimDescription;
+
     void display() const
     {
-        std::cout << "\tname: " << name << std::endl
-                  << "\tdescription: " << description << std::endl
-                  << "\taddressOffset: " << addressOffset << std::endl
-                  << "\tsize: " << size << std::endl
-                  << "\tregisterAccess: " << (int)registerAccess << std::endl
-                  << "\tresetValue: " << resetValue << std::endl;
-
-        std::cout << "\tfields: " << std::endl;
+        fmt::print(
+            "\tname: {}\n"
+            "\tdescription: {}\n"
+            "\taddressOffset: {:x}\n"
+            "\tsize: {}\n"
+            "\tregisterAccess: {}\n"
+            "\tresetValue: {}\n"
+            "\tfields: \n\n",
+            name, description, addressOffset, size, registerAccess.toString(), resetValue);
         for( auto& i : fields ) {
             i.display();
         }
@@ -61,7 +171,11 @@ struct AddressBlock
     unsigned int size;
     void display() const
     {
-        std::cout << std::endl << "\toffset: " << offset << std::endl << "\tsize: " << size << std::endl;
+        fmt::print(
+            "\toffset: {:x}\n"
+            "\tsize: {:x}\n",
+            offset, size
+            );
     }
 };
 
@@ -75,14 +189,15 @@ struct Peripheral
     std::vector< Register > registers;
     void display() const
     {
-        std::cout << std::endl
-                  << "name: " << name << std::endl
-                  << "description: " << description << std::endl
-                  << "groupName: " << groupName << std::endl
-                  << "baseAddress: " << baseAddress << std::endl
-                  << "addressBlock: ";
+        fmt::print(
+            "name: {}\n"
+            "description: {}\n"
+            "groupName: {}\n"
+            "baseAddress: 0x{:08x}\n"
+            "addressBlock: \n",
+            name, description, groupName, baseAddress);
         addressBlock.display();
-        std::cout << "registers: " << std::endl;
+        fmt::print("registers: \n");
         for( auto& i : registers ) {
             i.display();
         }
