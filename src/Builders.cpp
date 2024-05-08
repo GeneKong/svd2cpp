@@ -5,6 +5,7 @@
 #include <cassert>
 #include <fmt/core.h>
 #include <iostream>
+#include <algorithm>
 
 std::string toCamelCase( const std::string& str, bool raw_keep = false)
 {
@@ -155,13 +156,13 @@ void RegisterBuilder::build( std::stringstream& ss ) const
     }
     ss << "\n";
 
-    ss << fmt::format( "    constexpr static class {0} : public Register<_T, BaseAddr + {1}, AccessType::{2}> {{\n"
+    ss << fmt::format( "    class {0} : public Register<_T, BaseAddr + {1}, AccessType::{2}> {{\n"
                        "      public:\n"
                        "        constexpr static _T RegisterAddr =  BaseAddr + {1};\n"
-                       "        constexpr static inline unsigned int address() {{ return RegisterAddr; }}\n\n"
+                       "        constexpr static unsigned int address() {{ return RegisterAddr; }}\n\n"
                        "        using CurrentRegister = class {0};\n\n"
                        "        constexpr {0}(): chain_init_ {{0}} {{}}\n"
-                       "        constexpr {0}(_T v): chain_init_ {{v}} {{}}\n"
+                       "        constexpr explicit {0}(_T v): chain_init_ {{v}} {{}}\n"
                        "        constexpr auto load() const {{\n"
                        "            _T v =  *(volatile _T *)RegisterAddr;\n"
                        "            return CurrentRegister(v);\n"
@@ -206,7 +207,8 @@ void RegisterBuilder::build( std::stringstream& ss ) const
           "        }\n\n"
           "      private:\n"
           "        const _T chain_init_;\n";
-    ss << fmt::format( "    }} {} {{}};\n\n", registe.name );
+    ss << fmt::format( "    }};\n", registe.name );
+    ss << fmt::format( "    constexpr static {0} {1} {{}}; \n\n", toCamelCase( registe.name ), registe.name);
 }
 
 unsigned int RegisterBuilder::getRegisterAddress() const
@@ -219,7 +221,7 @@ void FieldBuilder::build( std::stringstream& ss ) const
     // Need process enumlate value
     std::string write_E = "_T";
     std::string read_E = "_T";
-    if(field.enums.size() > 0)
+    if(!field.enums.empty())
     {
         for( auto& e : field.enums ) {
             if(e.usage == EnumUsage::Read)
@@ -275,4 +277,6 @@ unsigned int FieldBuilder::getAddress() const
     return registerAddress;
 }
 
-void FunctionsBuilder::build( std::stringstream& ss ) const {}
+void FunctionsBuilder::build( std::stringstream& ss ) const {
+    // Noncompliant - method is empty
+}

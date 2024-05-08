@@ -4,6 +4,8 @@ list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/ProjectVersion.cmake)
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/ProjectSettings.cmake)
 
+cmake_minimum_required(VERSION 3.9) # 3.9+ is required for IPO/LTO checking
+# rest of your CMakeLists.txt
 project(
   svd2cpp
   LANGUAGES C CXX
@@ -15,6 +17,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(SPDLOG_FMT_EXTERNAL ON)
 add_subdirectory(libs/fmt)
 include_directories(libs/fmt/include)
+
+include(CheckIPOSupported)
+check_ipo_supported(RESULT result)
+if(result)
+    set_property(GLOBAL PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
+endif()
 
 add_subdirectory(libs/spdlog)
 add_subdirectory(libs/Catch2)

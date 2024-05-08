@@ -22,7 +22,7 @@ struct FieldDefineBuilder : public IBuilder
 
 struct PeripheralBuilder : public IBuilder
 {
-    PeripheralBuilder( const Peripheral& peripheral_ )
+    explicit PeripheralBuilder( const Peripheral& peripheral_ )
         : peripheral( peripheral_ )
     {
     }
