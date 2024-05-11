@@ -4,6 +4,7 @@
 
 struct IBuilder
 {
-    virtual void build( std::stringstream& ) const = 0;
+    virtual void buildTemplate( std::stringstream&) const = 0;
+    virtual void buildNormal( std::stringstream&) const = 0;
     virtual ~IBuilder() = default;
 };

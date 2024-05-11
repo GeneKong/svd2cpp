@@ -7,29 +7,51 @@
 
 struct NSBeginBuilder : public IBuilder
 {
-    void build( std::stringstream& ss ) const final;
+    void buildTemplate( std::stringstream& ss ) const final;
+    void buildNormal( std::stringstream& ss ) const final;
 };
 
 struct NSEnduilder : public IBuilder
 {
-    void build( std::stringstream& ss ) const final;
+    void buildTemplate( std::stringstream& ss ) const final;
+    void buildNormal( std::stringstream& ss ) const final;
 };
 
 struct FieldDefineBuilder : public IBuilder
 {
-    void build( std::stringstream& ss ) const final;
+    void buildTemplate( std::stringstream& ss ) const final;
+    void buildNormal( std::stringstream& ss ) const final;
 };
 
 struct PeripheralBuilder : public IBuilder
 {
-    explicit PeripheralBuilder( const Peripheral& peripheral_ )
+    explicit PeripheralBuilder( const Peripheral& peripheral_ , std::string alias_ = "")
         : peripheral( peripheral_ )
+        , alias(alias_)
     {
     }
-    void build( std::stringstream& ss ) const final;
+
+    void buildTemplate( std::stringstream& ss ) const final;
+    void buildNormal( std::stringstream& ss ) const final;
+
+    // Add pre-compile for check same periph define with different name
+    void preBuild();
+
+    size_t getHashCode()
+    {
+        return hashcode;
+    }
+
+    std::string getPeripheralName()
+    {
+        return peripheral.name;
+    }
 
 private:
     const Peripheral& peripheral;
+    const std::string alias;
+    std::stringstream outputStream;
+    size_t hashcode;
 };
 
 struct RegisterBuilder : public IBuilder
@@ -39,7 +61,11 @@ struct RegisterBuilder : public IBuilder
         , baseAddress( baseAddress_ )
     {
     }
-    void build( std::stringstream& ss ) const final;
+
+    void buildTemplate( std::stringstream& ss ) const final;
+    void buildNormal( std::stringstream& ss ) const final;
+
+
     unsigned int getRegisterAddress() const;
 
 private:
@@ -54,7 +80,10 @@ struct FieldBuilder : public IBuilder
         , registerAddress( registerAddress_ )
     {
     }
-    void build( std::stringstream& ss ) const final;
+    void buildTemplate( std::stringstream& ss ) const final;
+    void buildNormal( std::stringstream& ss ) const final;
+
+
     unsigned int getAddress() const;
 
 private:
@@ -64,5 +93,6 @@ private:
 
 struct FunctionsBuilder : public IBuilder
 {
-    void build( std::stringstream& ss ) const final;
+    void buildTemplate( std::stringstream& ss ) const final;
+    void buildNormal( std::stringstream& ss ) const final;
 };
