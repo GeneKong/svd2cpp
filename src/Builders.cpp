@@ -38,16 +38,6 @@ std::string toCamelCase( const std::string& str, bool raw_keep = false)
     return ss.str();
 }
 
-std::string toCamelCaseNoTailDigit( const std::string& str)
-{
-    // Remove tail digit
-    std::string result = str;
-    while( !result.empty() && isdigit( result.back() ) ) {
-        result.pop_back();
-    }
-    return toCamelCase(result);
-}
-
 std::string toLowerCase(const std::string &str)
 {
     std::stringstream ss;
@@ -79,7 +69,7 @@ void NSBeginBuilder::buildTemplate( std::stringstream& ss ) const
 {
     ss << fmt::format( "#pragma once\n"
                        "#include \"RegBase.h\"\n\n"
-                       "namespace pac::template {{\n" );
+                       "namespace pac::tmpl {{\n" );
 }
 
 void NSEnduilder::buildTemplate( std::stringstream& ss ) const
@@ -89,7 +79,7 @@ void NSEnduilder::buildTemplate( std::stringstream& ss ) const
 
 void NSBeginBuilder::buildNormal( std::stringstream& ss ) const
 {
-    ss << fmt::format( "\n\nnamespace pac::normal {{\n" );
+    ss << fmt::format( "\n\nnamespace pac::nor {{\n" );
 }
 
 void NSEnduilder::buildNormal( std::stringstream& ss ) const
@@ -196,11 +186,13 @@ void PeripheralBuilder::buildNormal( std::stringstream& ss ) const
 
     fieldEnums.clear();
 
-    ss << fmt::format( "\ntemplate<typename _T = uint32_t, _T BaseAddr = 0x{:08x}>\n"
-                       "class {} {{\n"
+    ss << fmt::format( "\nclass {0} {{\n"
                        "  public:\n"
-                       "  constexpr static _T BaseAddress = BaseAddr;\n",
-                       peripheral.baseAddress,
+                       "    using PeriphClass = {0};\n"
+                       "    const uint32_t base_addr_;\n"
+                       "    {0}(uint32_t baddr)\n"
+                       "        : base_addr_(baddr)\n"
+                       "    {{}}\n",
                        toCamelCase( peripheral.name ) );
     for( auto& registe : peripheral.registers ) {
         if( registe.dim ) {
@@ -214,7 +206,7 @@ void PeripheralBuilder::buildNormal( std::stringstream& ss ) const
                         reg.name = std::string( buff );
                     }
                     reg.addressOffset += reg.addressOffset * i;
-                    RegisterBuilder( reg, peripheral.baseAddress).buildTemplate( ss );
+                    RegisterBuilder( reg, peripheral.baseAddress).buildNormal( ss );
                 }
             }
             else {
@@ -232,13 +224,13 @@ void PeripheralBuilder::buildNormal( std::stringstream& ss ) const
                             reg.name = registe.dimName + reg.name;
                         }
                         reg.addressOffset += reg.dimIncrement * i + reg.addressOffset;
-                        RegisterBuilder( reg, peripheral.baseAddress).buildTemplate( ss );
+                        RegisterBuilder( reg, peripheral.baseAddress).buildNormal( ss );
                     }
                 }
             }
         }
         else {
-            RegisterBuilder( registe, peripheral.baseAddress).buildTemplate( ss );
+            RegisterBuilder( registe, peripheral.baseAddress).buildNormal( ss );
         }
     }
     ss << "};\n\n";
@@ -282,7 +274,7 @@ void RegisterBuilder::buildTemplate( std::stringstream& ss ) const
                        "            return chain_init_;\n"
                        "        }}\n"
                        "        constexpr auto resetValue() const {{\n"
-                       "            return CurrentRegister({3});\n"
+                       "            return CurrentRegister(0x{3:08x});\n"
                        "        }}\n",
         toCamelCase( registe.name ),
         registe.addressOffset,
@@ -325,6 +317,90 @@ void RegisterBuilder::buildTemplate( std::stringstream& ss ) const
     ss << fmt::format( "    constexpr static {0} {1} {{}}; \n\n", toCamelCase( registe.name ), registe.name);
 }
 
+void RegisterBuilder::buildNormal( std::stringstream& ss ) const
+{
+    // process all enum class first then field define
+    for( auto& field : registe.fields ) {
+        if( field.enums.size() > 0 ) {
+            for( auto& e : field.enums ) {
+                auto resultIt = std::find_if( fieldEnums.begin(), fieldEnums.end(), [&]( const auto& item ) {
+                    return item == e.name;
+                });
+                if(resultIt == fieldEnums.end())
+                {
+                    ss << fmt::format( "    enum class {} {{\n", "E_" + e.name);
+                    for( auto& v : e.values ) {
+                        ss << fmt::format( "        {} = {},\n", toCamelCase(v.name, true), v.value );
+                    }
+                    ss << fmt::format( "    }};\n" );
+                    fieldEnums.push_back(e.name);
+                }
+            }
+        }
+    }
+    ss << "\n";
+
+    ss << fmt::format( "    class {0} : public Register<AccessType::{1}> {{\n"
+                       "      public:\n"
+                       "        using CurrentRegister = class {0};\n\n"
+                       "        {0}() = delete;\n"
+                       "        auto load() {{\n"
+                       "            uint32_t v =  *(volatile uint32_t *)(addr_);\n"
+                       "            return CurrentRegister(v);\n"
+                       "        }}\n"
+                       "        constexpr auto chain_value() const {{\n"
+                       "            return chain_init_;\n"
+                       "        }}\n"
+                       "        auto resetValue() const {{\n"
+                       "            return CurrentRegister(addr_, 0x{2:08x});\n"
+                       "        }}\n",
+        toCamelCase( registe.name ),
+        registe.registerAccess.toString(),
+        registe.resetValue);
+
+    // process all fields instance in register
+    for( auto& field : registe.fields ) {
+        if( field.dim ) {
+            // process regsister array...
+            std::vector<std::string> field_array{};
+            char buff[256];
+            for( int i = 0; i < field.dim; i++ ) {
+                Field f{ field };
+                if( field.name.find( '%' ) != std::string::npos ) {
+                    snprintf( buff, 255, field.name.c_str(), field.dimIndex[i].c_str() );
+                    f.name = std::string( buff );
+                }
+                f.bitOffset += f.dimIncrement * i;
+                FieldBuilder( f, getRegisterAddress() ).buildNormal( ss );
+                field_array.push_back(f.name);
+            }
+
+            // process cluster registers
+            snprintf( buff, 255, field.name.c_str(), "s" );
+            ss << fmt::format("\n"
+                               "        constexpr auto static {} = std::make_tuple({});\n", buff, fmt::join(field_array, ", "));
+        }
+        else {
+            FieldBuilder( field, getRegisterAddress() ).buildNormal( ss );
+        }
+    }
+
+    ss << fmt::format(
+
+          "        void store() const {{\n"
+          "            *(volatile uint32_t *)(addr_) = chain_init_;\n"
+          "        }}\n\n"
+          "      protected:\n"
+          "        {0}(uint32_t addr): Register<AccessType::{1}>(addr), chain_init_ {{0}} {{}}\n"
+          "        explicit {0}(uint32_t addr, uint32_t v): Register<AccessType::{1}>(addr), chain_init_ {{v}} {{}}\n\n"
+          "        friend PeriphClass;\n"
+          "        const uint32_t chain_init_;\n",
+        toCamelCase( registe.name ),
+        registe.registerAccess.toString());
+    ss << fmt::format( "    }};\n", registe.name );
+    ss << fmt::format( "    {0} {1}() {{ return {0}(base_addr_ + {2}); }}; \n\n", toCamelCase( registe.name ), toLowerCase( registe.name ), registe.addressOffset);
+}
+
 unsigned int RegisterBuilder::getRegisterAddress() const
 {
     return baseAddress + registe.addressOffset;
@@ -355,7 +431,7 @@ void FieldBuilder::buildTemplate( std::stringstream& ss ) const
 
     if(write_E != "_T" || read_E != "_T")
     {
-        ss << fmt::format( "        constexpr static TFiled<_T, RegisterAddr, {}, {}, AccessType::{}, {}, {}> {}{{}};\n"
+        ss << fmt::format( "        constexpr static Filed<_T, RegisterAddr, {}, {}, AccessType::{}, {}, {}> {}{{}};\n"
                            "        constexpr auto {}({} v) const\n"
                            "        {{\n"
                            "            return CurrentRegister({}.evalSet(chain_init_, v));\n"
@@ -372,7 +448,7 @@ void FieldBuilder::buildTemplate( std::stringstream& ss ) const
             );
     }
     else {
-        ss << fmt::format( "        constexpr static TFiled<_T, RegisterAddr, {}, {}, AccessType::{}> {}{{}};\n"
+        ss << fmt::format( "        constexpr static Filed<_T, RegisterAddr, {}, {}, AccessType::{}> {}{{}};\n"
                            "        constexpr auto {}(_T v) const\n"
                            "        {{\n"
                            "            return CurrentRegister({}.evalSet(chain_init_, v));\n"
@@ -382,7 +458,7 @@ void FieldBuilder::buildTemplate( std::stringstream& ss ) const
             field.fieldAccess.toString(),
             toUpperCase(field.name),
             toLowerCase(field.name),
-                           toUpperCase(field.name));
+            toUpperCase(field.name));
     }
 }
 
@@ -411,33 +487,35 @@ void FieldBuilder::buildNormal( std::stringstream& ss ) const
 
     if(write_E != "_T" || read_E != "_T")
     {
-        ss << fmt::format( "        constexpr static Filed<_T, RegisterAddr, {}, {}, AccessType::{}, {}, {}> {}{{}};\n"
-                           "        constexpr auto {}({} v) const\n"
+        ss << fmt::format( "        auto {}({} v) const\n"
                            "        {{\n"
-                           "            return CurrentRegister({}.evalSet(chain_init_, v));\n"
+                           "            constexpr static Filed<uint32_t, 0x{:08x}, {}, {}, AccessType::{}, {}, {}> {} {{}};\n"
+                           "            return CurrentRegister(addr_, {}.evalSet(chain_init_, v));\n"
                            "        }}\n",
+                           toLowerCase(field.name),
+                           write_E,
+                           getAddress(),
                            field.bitOffset,
                            field.bitWidth,
                            field.fieldAccess.toString(),
                            read_E,
                            write_E,
                            toUpperCase(field.name),
-                           toLowerCase(field.name),
-                           write_E,
                            toUpperCase(field.name)
         );
     }
     else {
-        ss << fmt::format( "        constexpr static Filed<_T, RegisterAddr, {}, {}, AccessType::{}> {}{{}};\n"
-                           "        constexpr auto {}(_T v) const\n"
+        ss << fmt::format( "        auto {}(uint32_t v) const\n"
                            "        {{\n"
-                           "            return CurrentRegister({}.evalSet(chain_init_, v));\n"
+                           "            constexpr static Filed<uint32_t, 0x{:08x}, {}, {}, AccessType::{}> {} {{}};\n"
+                           "            return CurrentRegister(addr_, {}.evalSet(chain_init_, v));\n"
                            "        }}\n",
+                           toLowerCase(field.name),
+                           getAddress(),
                            field.bitOffset,
                            field.bitWidth,
                            field.fieldAccess.toString(),
                            toUpperCase(field.name),
-                           toLowerCase(field.name),
                            toUpperCase(field.name));
     }
 }

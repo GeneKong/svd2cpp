@@ -45,7 +45,6 @@ void FileBuilder::build()
     for( auto& builder : builders ) {
         builder->buildTemplate( outputStream );
     }
-
     for( auto& builder : builders ) {
         builder->buildNormal( outputStream );
     }
