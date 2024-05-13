@@ -10,6 +10,7 @@
 std::string toCamelCase( const std::string& str, bool raw_keep = false)
 {
     std::stringstream ss;
+
     bool capitalize = true;
     for( char c : str ) {
         if( c == ' ' || c == '_' ) {
@@ -68,7 +69,8 @@ std::string toUpperCase(const std::string &str)
 void NSBeginBuilder::buildTemplate( std::stringstream& ss ) const
 {
     ss << fmt::format( "#pragma once\n"
-                       "#include \"RegBase.h\"\n\n"
+                       "#include \"RegBase.h\"\n"
+                       "#include <optional>\n\n"
                        "namespace pac::tmpl {{\n" );
 }
 
@@ -190,7 +192,7 @@ void PeripheralBuilder::buildNormal( std::stringstream& ss ) const
                        "  public:\n"
                        "    using PeriphClass = {0};\n"
                        "    const uint32_t base_addr_;\n"
-                       "    {0}(uint32_t baddr)\n"
+                       "    explicit {0}(uint32_t baddr)\n"
                        "        : base_addr_(baddr)\n"
                        "    {{}}\n",
                        toCamelCase( peripheral.name ) );
@@ -344,15 +346,15 @@ void RegisterBuilder::buildNormal( std::stringstream& ss ) const
                        "      public:\n"
                        "        using CurrentRegister = class {0};\n\n"
                        "        {0}() = delete;\n"
-                       "        auto load() {{\n"
+                       "        auto load() const {{\n"
                        "            uint32_t v =  *(volatile uint32_t *)(addr_);\n"
-                       "            return CurrentRegister(v);\n"
+                       "            return CurrentRegister(addr_, v, 0, 32);\n"
                        "        }}\n"
                        "        constexpr auto chain_value() const {{\n"
                        "            return chain_init_;\n"
                        "        }}\n"
                        "        auto resetValue() const {{\n"
-                       "            return CurrentRegister(addr_, 0x{2:08x});\n"
+                       "            return CurrentRegister(addr_, 0x{2:08x}, 0, 32);\n"
                        "        }}\n",
         toCamelCase( registe.name ),
         registe.registerAccess.toString(),
@@ -391,14 +393,16 @@ void RegisterBuilder::buildNormal( std::stringstream& ss ) const
           "            *(volatile uint32_t *)(addr_) = chain_init_;\n"
           "        }}\n\n"
           "      protected:\n"
-          "        {0}(uint32_t addr): Register<AccessType::{1}>(addr), chain_init_ {{0}} {{}}\n"
-          "        explicit {0}(uint32_t addr, uint32_t v): Register<AccessType::{1}>(addr), chain_init_ {{v}} {{}}\n\n"
+          "        constexpr explicit {0}(uint32_t addr): \n"
+          "            Register<AccessType::{1}>(addr, 0, 32), chain_init_ {{0}} {{}}\n"
+          "        constexpr explicit {0}(uint32_t addr, uint32_t v, uint8_t offset, uint8_t width): \n"
+          "            Register<AccessType::{1}>(addr, offset, width), chain_init_ {{v}} {{}}\n\n"
           "        friend PeriphClass;\n"
           "        const uint32_t chain_init_;\n",
         toCamelCase( registe.name ),
         registe.registerAccess.toString());
     ss << fmt::format( "    }};\n", registe.name );
-    ss << fmt::format( "    {0} {1}() {{ return {0}(base_addr_ + {2}); }}; \n\n", toCamelCase( registe.name ), toLowerCase( registe.name ), registe.addressOffset);
+    ss << fmt::format( "    {0} {1}() const {{ return {0}(base_addr_ + 0x{2:x}); }}; \n\n", toCamelCase( registe.name ), toLowerCase( registe.name ), registe.addressOffset);
 }
 
 unsigned int RegisterBuilder::getRegisterAddress() const
@@ -487,10 +491,14 @@ void FieldBuilder::buildNormal( std::stringstream& ss ) const
 
     if(write_E != "_T" || read_E != "_T")
     {
-        ss << fmt::format( "        auto {}({} v) const\n"
+        ss << fmt::format( "        constexpr auto {}(std::optional<{}> v) const\n"
                            "        {{\n"
                            "            constexpr static Filed<uint32_t, 0x{:08x}, {}, {}, AccessType::{}, {}, {}> {} {{}};\n"
-                           "            return CurrentRegister(addr_, {}.evalSet(chain_init_, v));\n"
+                           "            if(v.has_value()) {{\n"
+                           "                return CurrentRegister(addr_, {}.evalSet(chain_init_, v, {}, {}));\n"
+                           "            }} else {{\n"
+                           "                return CurrentRegister(addr_, chain_init_, {}, {});\n"
+                           "            }}\n"
                            "        }}\n",
                            toLowerCase(field.name),
                            write_E,
@@ -501,14 +509,22 @@ void FieldBuilder::buildNormal( std::stringstream& ss ) const
                            read_E,
                            write_E,
                            toUpperCase(field.name),
-                           toUpperCase(field.name)
+                           toUpperCase(field.name),
+                           field.bitOffset,
+                           field.bitWidth,
+                           field.bitOffset,
+                           field.bitWidth
         );
     }
     else {
-        ss << fmt::format( "        auto {}(uint32_t v) const\n"
+        ss << fmt::format( "        constexpr auto {}(std::optional<uint32_t> v) const\n"
                            "        {{\n"
                            "            constexpr static Filed<uint32_t, 0x{:08x}, {}, {}, AccessType::{}> {} {{}};\n"
-                           "            return CurrentRegister(addr_, {}.evalSet(chain_init_, v));\n"
+                           "            if(v.has_value()) {{\n"
+                           "                return CurrentRegister(addr_, {}.evalSet(chain_init_, v.value()), {}, {});\n"
+                           "            }} else {{\n"
+                           "                return CurrentRegister(addr_, chain_init_, {}, {});\n"
+                           "            }}\n"
                            "        }}\n",
                            toLowerCase(field.name),
                            getAddress(),
@@ -516,7 +532,12 @@ void FieldBuilder::buildNormal( std::stringstream& ss ) const
                            field.bitWidth,
                            field.fieldAccess.toString(),
                            toUpperCase(field.name),
-                           toUpperCase(field.name));
+                           toUpperCase(field.name),
+                           field.bitOffset,
+                           field.bitWidth,
+                           field.bitOffset,
+                           field.bitWidth
+                           );
     }
 }
 
