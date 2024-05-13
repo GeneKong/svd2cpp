@@ -355,6 +355,9 @@ void RegisterBuilder::buildNormal( std::stringstream& ss ) const
                        "        }}\n"
                        "        auto resetValue() const {{\n"
                        "            return CurrentRegister(addr_, 0x{2:08x}, 0, 32);\n"
+                       "        }}\n"
+                       "        auto zeroValue() const {{\n"
+                       "            return CurrentRegister(addr_, 0, 0, 32);\n"
                        "        }}\n",
         toCamelCase( registe.name ),
         registe.registerAccess.toString(),
@@ -402,7 +405,14 @@ void RegisterBuilder::buildNormal( std::stringstream& ss ) const
         toCamelCase( registe.name ),
         registe.registerAccess.toString());
     ss << fmt::format( "    }};\n", registe.name );
-    ss << fmt::format( "    {0} {1}() const {{ return {0}(base_addr_ + 0x{2:x}); }}; \n\n", toCamelCase( registe.name ), toLowerCase( registe.name ), registe.addressOffset);
+    ss << fmt::format( "    {0} {1}(std::optional<uint32_t> v = std::nullopt) const {{\n"
+                       "         if (v.has_value())\n"
+                       "             {0}(base_addr_ + 0x{2:x}, v.value(), 0, 32).store();\n"
+                       "         return {0}(base_addr_ + 0x{2:x}).load(); \n"
+                       "     }}; \n\n",
+                       toCamelCase( registe.name ),
+                       toLowerCase( registe.name ),
+                       registe.addressOffset);
 }
 
 unsigned int RegisterBuilder::getRegisterAddress() const
@@ -435,10 +445,10 @@ void FieldBuilder::buildTemplate( std::stringstream& ss ) const
 
     if(write_E != "_T" || read_E != "_T")
     {
-        ss << fmt::format( "        constexpr static Filed<_T, RegisterAddr, {}, {}, AccessType::{}, {}, {}> {}{{}};\n"
-                           "        constexpr auto {}({} v) const\n"
+        ss << fmt::format( "        constexpr static Filed<_T, RegisterAddr, {0}, {1}, AccessType::{2}, {3}, {4}> {5}{{}};\n"
+                           "        constexpr auto {6}({4} v) const\n"
                            "        {{\n"
-                           "            return CurrentRegister({}.evalSet(chain_init_, v));\n"
+                           "            return CurrentRegister({5}.evalSet(chain_init_, v));\n"
                            "        }}\n",
             field.bitOffset,
             field.bitWidth,
@@ -446,23 +456,20 @@ void FieldBuilder::buildTemplate( std::stringstream& ss ) const
             read_E,
             write_E,
             toUpperCase(field.name),
-            toLowerCase(field.name),
-            write_E,
-            toUpperCase(field.name)
+            toLowerCase(field.name)
             );
     }
     else {
-        ss << fmt::format( "        constexpr static Filed<_T, RegisterAddr, {}, {}, AccessType::{}> {}{{}};\n"
-                           "        constexpr auto {}(_T v) const\n"
+        ss << fmt::format( "        constexpr static Filed<_T, RegisterAddr, {0}, {1}, AccessType::{2}> {3}{{}};\n"
+                           "        constexpr auto {4}(_T v) const\n"
                            "        {{\n"
-                           "            return CurrentRegister({}.evalSet(chain_init_, v));\n"
+                           "            return CurrentRegister({3}.evalSet(chain_init_, v));\n"
                            "        }}\n",
             field.bitOffset,
             field.bitWidth,
             field.fieldAccess.toString(),
             toUpperCase(field.name),
-            toLowerCase(field.name),
-            toUpperCase(field.name));
+            toLowerCase(field.name));
     }
 }
 
@@ -491,17 +498,16 @@ void FieldBuilder::buildNormal( std::stringstream& ss ) const
 
     if(write_E != "_T" || read_E != "_T")
     {
-        ss << fmt::format( "        constexpr auto {}(std::optional<{}> v) const\n"
+        ss << fmt::format( "        using {6} = Filed<uint32_t, 0x{0:08x}, {1}, {2}, AccessType::{3}, {4}, {5}>;\n"
+                           "        constexpr auto {7}(std::optional<{5}> v = std::nullopt) const\n"
                            "        {{\n"
-                           "            constexpr static Filed<uint32_t, 0x{:08x}, {}, {}, AccessType::{}, {}, {}> {} {{}};\n"
+                           "            constexpr static {6} test{{}};\n"
                            "            if(v.has_value()) {{\n"
-                           "                return CurrentRegister(addr_, {}.evalSet(chain_init_, v, {}, {}));\n"
+                           "                return CurrentRegister(addr_, test.evalSet(chain_init_, v, {1}, {2}));\n"
                            "            }} else {{\n"
-                           "                return CurrentRegister(addr_, chain_init_, {}, {});\n"
+                           "                return CurrentRegister(addr_, chain_init_, {1}, {2});\n"
                            "            }}\n"
                            "        }}\n",
-                           toLowerCase(field.name),
-                           write_E,
                            getAddress(),
                            field.bitOffset,
                            field.bitWidth,
@@ -509,34 +515,27 @@ void FieldBuilder::buildNormal( std::stringstream& ss ) const
                            read_E,
                            write_E,
                            toUpperCase(field.name),
-                           toUpperCase(field.name),
-                           field.bitOffset,
-                           field.bitWidth,
-                           field.bitOffset,
-                           field.bitWidth
+                           toLowerCase(field.name)
         );
     }
     else {
-        ss << fmt::format( "        constexpr auto {}(std::optional<uint32_t> v) const\n"
+        ss << fmt::format(
+                           "        using {4} = Filed<uint32_t, 0x{0:08x}, {1}, {2}, AccessType::{3}>;\n"
+                           "        constexpr auto {5}(std::optional<uint32_t> v = std::nullopt) const\n"
                            "        {{\n"
-                           "            constexpr static Filed<uint32_t, 0x{:08x}, {}, {}, AccessType::{}> {} {{}};\n"
+                           "            constexpr static {4} test{{}};\n"
                            "            if(v.has_value()) {{\n"
-                           "                return CurrentRegister(addr_, {}.evalSet(chain_init_, v.value()), {}, {});\n"
+                           "                return CurrentRegister(addr_, test.evalSet(chain_init_, v.value()), {1}, {2});\n"
                            "            }} else {{\n"
-                           "                return CurrentRegister(addr_, chain_init_, {}, {});\n"
+                           "                return CurrentRegister(addr_, chain_init_, {1}, {2});\n"
                            "            }}\n"
                            "        }}\n",
-                           toLowerCase(field.name),
                            getAddress(),
                            field.bitOffset,
                            field.bitWidth,
                            field.fieldAccess.toString(),
                            toUpperCase(field.name),
-                           toUpperCase(field.name),
-                           field.bitOffset,
-                           field.bitWidth,
-                           field.bitOffset,
-                           field.bitWidth
+                           toLowerCase(field.name)
                            );
     }
 }
