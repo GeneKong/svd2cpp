@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.26 FATAL_ERROR)
 #list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
-#include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/ProjectVersion.cmake)
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/ProjectVersion.cmake)
 #include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/ProjectSettings.cmake)
 
 cmake_minimum_required(VERSION 3.9) # 3.9+ is required for IPO/LTO checking

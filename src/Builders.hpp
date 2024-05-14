@@ -65,12 +65,32 @@ struct RegisterBuilder : public IBuilder
     void buildTemplate( std::stringstream& ss ) const final;
     void buildNormal( std::stringstream& ss ) const final;
 
+    // Add pre-compile for check same register define with different register name
+    void preBuild();
+
+    size_t getHashCode()
+    {
+        return hashcode;
+    }
+
+    auto &getName()
+    {
+        return registe.name;
+    }
 
     unsigned int getRegisterAddress() const;
+
+    unsigned int getRegisterOffset() const
+    {
+        return registe.addressOffset;
+    }
+
 
 private:
     const Register& registe;
     const unsigned int baseAddress;
+    std::stringstream outputStream;
+    size_t hashcode;
 };
 
 struct FieldBuilder : public IBuilder

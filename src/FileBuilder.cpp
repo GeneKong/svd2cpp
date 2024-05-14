@@ -19,7 +19,7 @@ void FileBuilder::setupBuilders()
     for( auto& peripheral : peripherals ) {
         auto builder = std::make_unique<PeripheralBuilder>(peripheral, peripheral.name);
         builder->preBuild();
-        fmt::println("{} 0x{:08x}", builder->getPeripheralName(), builder->getHashCode());
+//        fmt::println("{} 0x{:08x}", builder->getPeripheralName(), builder->getHashCode());
         if(!hashcodeMap.contains(builder->getHashCode())) {
             hashcodeMap[builder->getHashCode()] = builder->getPeripheralName();
             periphNames[builder->getPeripheralName()] = builder->getPeripheralName();

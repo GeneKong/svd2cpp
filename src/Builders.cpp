@@ -6,6 +6,8 @@
 #include <fmt/core.h>
 #include <iostream>
 #include <algorithm>
+#include <unordered_map>
+#include <map>
 
 std::string toCamelCase( const std::string& str, bool raw_keep = false)
 {
@@ -64,6 +66,16 @@ std::string toUpperCase(const std::string &str)
         ss << static_cast< char >( std::toupper( c ) );
     }
     return ss.str();
+}
+
+std::string removeTailDigit(const std::string &str)
+{
+    std::string result = str;
+    while(result.back() >= '0' && result.back() <= '9')
+    {
+        result.pop_back();
+    }
+    return result;
 }
 
 void NSBeginBuilder::buildTemplate( std::stringstream& ss ) const
@@ -187,6 +199,7 @@ void PeripheralBuilder::buildNormal( std::stringstream& ss ) const
     }
 
     fieldEnums.clear();
+    std::vector< std::unique_ptr< RegisterBuilder > > builders;
 
     ss << fmt::format( "\nclass {0} {{\n"
                        "  public:\n"
@@ -196,6 +209,7 @@ void PeripheralBuilder::buildNormal( std::stringstream& ss ) const
                        "        : base_addr_(baddr)\n"
                        "    {{}}\n",
                        toCamelCase( peripheral.name ) );
+
     for( auto& registe : peripheral.registers ) {
         if( registe.dim ) {
             if( registe.registers.empty() ) {
@@ -208,7 +222,8 @@ void PeripheralBuilder::buildNormal( std::stringstream& ss ) const
                         reg.name = std::string( buff );
                     }
                     reg.addressOffset += reg.addressOffset * i;
-                    RegisterBuilder( reg, peripheral.baseAddress).buildNormal( ss );
+                    //RegisterBuilder( reg, peripheral.baseAddress).buildNormal( ss );
+                    builders.push_back(std::make_unique<RegisterBuilder>( reg, peripheral.baseAddress));
                 }
             }
             else {
@@ -226,16 +241,95 @@ void PeripheralBuilder::buildNormal( std::stringstream& ss ) const
                             reg.name = registe.dimName + reg.name;
                         }
                         reg.addressOffset += reg.dimIncrement * i + reg.addressOffset;
-                        RegisterBuilder( reg, peripheral.baseAddress).buildNormal( ss );
+                        //RegisterBuilder( reg, peripheral.baseAddress).buildNormal( ss );
+                        builders.push_back(std::make_unique<RegisterBuilder>(reg, peripheral.baseAddress));
                     }
                 }
             }
         }
         else {
-            RegisterBuilder( registe, peripheral.baseAddress).buildNormal( ss );
+            // prebuild: auto check register array
+            //RegisterBuilder(registe, peripheral.baseAddress).buildNormal( ss );
+            builders.push_back(std::make_unique<RegisterBuilder>(registe, peripheral.baseAddress));
         }
     }
+
+    // generate build register source...
+    struct RegisterInfo {
+        uint32_t arrayOffMin;
+        uint32_t arrayOffMax;
+        uint32_t arrayNum;
+        uint32_t base;
+    };
+
+    std::map<size_t , std::string> hashcodeMap;
+    std::map<std::string, RegisterInfo> regInfoMap;
+    std::map<std::string, std::string> regAlias;
+
+    for(auto &build : builders) {
+        build->preBuild();
+
+//        fmt::println("{} 0x{:08x}", build->getName(), build->getHashCode());
+
+        auto cname = build->getName();
+        if(!hashcodeMap.contains(build->getHashCode())) {
+
+            hashcodeMap[build->getHashCode()] = cname;
+            regAlias[cname] = cname;
+            regInfoMap[cname] = { build->getRegisterOffset(),
+                                  build->getRegisterOffset(),
+                                  1,
+                                  build->getRegisterAddress() };
+        }
+        else {
+            regAlias[cname] = hashcodeMap[build->getHashCode()];
+            cname = hashcodeMap[build->getHashCode()];
+            regInfoMap[cname].arrayOffMin = std::min(build->getRegisterOffset(), regInfoMap[cname].arrayOffMin);
+            regInfoMap[cname].arrayOffMax = std::max(build->getRegisterOffset(), regInfoMap[cname].arrayOffMax);
+            regInfoMap[cname].arrayNum ++;
+        }
+    }
+
+    for(auto &build : builders) {
+        build->buildNormal(ss);
+    }
+
+    // process array register
+    for(auto &[reg, item] : regInfoMap) {
+        if(item.arrayNum > 1) {
+            std::string comment = "";
+            for(auto [k, v] : regAlias)
+            {
+                if(std::equal(v.begin(), v.end(), reg.begin(), reg.end()))
+                {
+                    comment += k + ", ";
+                }
+            }
+            ss << fmt::format( "    // {1}_array items are: {4}\n"
+                               "    {0} {1}_array(size_t idx, std::optional<uint32_t> v = std::nullopt) const {{\n"
+                               "         if (v.has_value())\n"
+                               "             {0}(base_addr_ + 0x{2:x} + 0x{3:x}*idx, v.value(), 0, 32).store();\n"
+                               "         return {0}(base_addr_ + 0x{2:x} + 0x{3:x}*idx).load(); \n"
+                               "     }}; \n\n",
+                               toCamelCase( reg ),
+                               toLowerCase( removeTailDigit( reg ) ),
+                               item.arrayOffMin,
+                               (item.arrayOffMax - item.arrayOffMin)/(regInfoMap[reg].arrayNum - 1),
+                               comment);
+        }
+    }
+
     ss << "};\n\n";
+}
+
+void RegisterBuilder::preBuild()
+{
+    auto reg = registe;
+    reg.name = "CheckSame";
+    reg.addressOffset = 0;
+    RegisterBuilder(reg, baseAddress).buildTemplate( outputStream );
+    std::hash<std::string> hasher;
+    hashcode = hasher(outputStream.str());
 }
 
 void RegisterBuilder::buildTemplate( std::stringstream& ss ) const
