@@ -83,7 +83,7 @@ void NSBeginBuilder::buildTemplate( std::stringstream& ss ) const
     ss << fmt::format( "#pragma once\n"
                        "#include \"RegBase.h\"\n"
                        "#include <optional>\n\n"
-                       "namespace pac::tmpl {{\n" );
+                       "namespace pac::tpl {{\n" );
 }
 
 void NSEnduilder::buildTemplate( std::stringstream& ss ) const
@@ -312,7 +312,7 @@ void PeripheralBuilder::buildNormal( std::stringstream& ss ) const
                                "         return {0}(base_addr_ + 0x{2:x} + 0x{3:x}*idx).load(); \n"
                                "     }}; \n\n",
                                toCamelCase( reg ),
-                               toLowerCase( removeTailDigit( reg ) ),
+                               toLowerCase( reg ),      // removeTailDigit
                                item.arrayOffMin,
                                (item.arrayOffMax - item.arrayOffMin)/(regInfoMap[reg].arrayNum - 1),
                                comment);
@@ -361,7 +361,6 @@ void RegisterBuilder::buildTemplate( std::stringstream& ss ) const
                        "        constexpr static unsigned int address() {{ return RegisterAddr; }}\n\n"
                        "        using CurrentRegister = class {0};\n\n"
                        "        constexpr {0}(): chain_init_ {{0}} {{}}\n"
-                       "        constexpr explicit {0}(_T v): chain_init_ {{v}} {{}}\n"
                        "        constexpr auto load() const {{\n"
                        "            _T v =  *(volatile _T *)RegisterAddr;\n"
                        "            return CurrentRegister(v);\n"
@@ -404,11 +403,14 @@ void RegisterBuilder::buildTemplate( std::stringstream& ss ) const
         }
     }
 
-    ss << "        constexpr void store() const {\n"
+    ss << fmt::format(
+          "        constexpr void store() const {{\n"
           "            *(volatile _T *)RegisterAddr = chain_init_;\n"
-          "        }\n\n"
+          "        }}\n\n"
           "      private:\n"
-          "        const _T chain_init_;\n";
+          "        constexpr explicit {0}(_T v): chain_init_ {{v}} {{}}\n"
+          "        const _T chain_init_;\n",
+          toCamelCase( registe.name ));
     ss << fmt::format( "    }};\n", registe.name );
     ss << fmt::format( "    constexpr static {0} {1} {{}}; \n\n", toCamelCase( registe.name ), registe.name);
 }
